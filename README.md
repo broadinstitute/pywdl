@@ -1,5 +1,7 @@
 # PyWDL
 
+[![Build Status](https://travis-ci.org/broadinstitute/pywdl.svg?branch=master)](https://travis-ci.org/broadinstitute/pywdl)
+
 A Python implementation of a WDL parser and language bindings.
 
 For Scala language bindings, use [Cromwell](http://github.com/broadinstitute/cromwell).
