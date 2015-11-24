@@ -106,7 +106,7 @@ with open('/x/y/z.txt') as fp:
 CODE"""
 
     assert task.outputs == []
-    assert task.runtime.keys() == ['docker']
+    assert list(task.runtime.keys()) == ['docker']
     assert task.runtime['docker'].wdl_string() == '"${docker}"'
 
     def lookup(name):
@@ -142,7 +142,7 @@ def test_task_task1():
     assert task.outputs[1].name == 'foo'
     assert task.outputs[1].expression.wdl_string() == '1+1'
     assert task.outputs[1].type == WdlIntegerType()
-    assert task.runtime.keys() == ['docker']
+    assert list(task.runtime.keys()) == ['docker']
     assert task.runtime['docker'].wdl_string() == '"${docker}"'
 
     def lookup(name):

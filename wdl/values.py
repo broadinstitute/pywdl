@@ -40,9 +40,16 @@ class WdlUndefined(WdlValue):
 class WdlString(WdlValue):
     type = WdlStringType()
     def check_compatible(self, value):
-        if isinstance(value, unicode): value = value.encode('utf-8')
+        try:
+            if not isinstance(value, str): value = value.encode('utf-8')
+        except AttributeError:
+            pass
+        try:
+            if not isinstance(value, str): value = value.decode('utf-8')
+        except AttributeError:
+            pass
         if not isinstance(value, str):
-            raise EvalException("WdlString must hold a python 'str': {}".format(value.encode('utf-8')))
+            raise EvalException("WdlString must hold a python 'str': {} ({})".format(value, value.__class__))
     def add(self, rhs):
         if assert_type(rhs, [WdlIntegerType, WdlFloatType, WdlStringType, WdlFileType]):
             return WdlString(self.value + str(rhs.value))
@@ -87,7 +94,7 @@ class WdlInteger(WdlValue):
         super(WdlInteger, self).multiply(rhs)
     def divide(self, rhs):
         if assert_type(rhs, [WdlIntegerType]):
-            return WdlInteger(self.value / rhs.value)
+            return WdlInteger(int(self.value / rhs.value))
         if assert_type(rhs, [WdlFloatType]):
             return WdlFloat(self.value / rhs.value)
         super(WdlInteger, self).divide(rhs)
@@ -189,9 +196,16 @@ class WdlFloat(WdlValue):
 class WdlFile(WdlString):
     type = WdlFileType()
     def check_compatible(self, value):
-        if isinstance(value, unicode): value = value.encode('utf-8')
+        try:
+            if not isinstance(value, str): value = value.encode('utf-8')
+        except AttributeError:
+            pass
+        try:
+            if not isinstance(value, str): value = value.decode('utf-8')
+        except AttributeError:
+            pass
         if not isinstance(value, str):
-            raise EvalException("WdlFile must hold a python 'str': {}".format(value.encode('utf-8')))
+            raise EvalException("WdlString must hold a python 'str': {} ({})".format(value, value.__class__))
     def add(self, rhs):
         if assert_type(rhs, [WdlFileType, WdlStringType]):
             return WdlFile(self.value + str(rhs.value))

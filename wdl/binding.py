@@ -488,12 +488,12 @@ def eval(ast, lookup=lambda var: None, functions=None):
             array_or_map = eval(ast.attr('lhs'), lookup, functions)
             index = eval(ast.attr('rhs'), lookup, functions)
 
-	    if isinstance(array_or_map, WdlArray) and isinstance(index, WdlInteger):
-	    	return array_or_map.value[index.value]
-	    elif isinstance(array_or_map, WdlArray):
-	    	raise EvalException('Cannot index array {} with {}'.format(array_or_map, index))
-	    elif isinstance(array_or_map, WdlMap) and isinstance(index.type, WdlPrimitiveType):
-	    	return array_or_map.value[index]
+            if isinstance(array_or_map, WdlArray) and isinstance(index, WdlInteger):
+                return array_or_map.value[index.value]
+            elif isinstance(array_or_map, WdlArray):
+                raise EvalException('Cannot index array {} with {}'.format(array_or_map, index))
+            elif isinstance(array_or_map, WdlMap) and isinstance(index.type, WdlPrimitiveType):
+                return array_or_map.value[index]
             raise EvalException('ArrayOrMapLookup not implemented yet')
         if ast.name == 'MemberAccess':
             object = eval(ast.attr('lhs'), lookup, functions)
