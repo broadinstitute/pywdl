@@ -3,12 +3,12 @@ import wdl.binding
 from wdl.binding import *
 
 with open('wdl/test/cases/0/wdl') as fp:
-    wdl_document = wdl.load(fp, '<test>')
-    workflow = wdl_document.workflows[0]
+    wdl_namespace = wdl.load(fp, '<test>')
+    workflow = wdl_namespace.workflows[0]
 
 def test_document():
-    assert len(wdl_document.workflows) == 1
-    assert len(wdl_document.tasks) == 4
+    assert len(wdl_namespace.workflows) == 1
+    assert len(wdl_namespace.tasks) == 4
 
 def test_workflow():
     assert workflow.name == 'simple'
@@ -77,7 +77,7 @@ def test_workflow_scatters():
     assert workflow.body[4].body[0].body[0].name == '_s19'
 
 def test_task_inline():
-    task = wdl_document.task('inline')
+    task = wdl_namespace.resolve('inline')
     assert task.name == 'inline'
     assert len(task.declarations) == 2
     assert task.declarations[0].name == 'path'
@@ -117,7 +117,7 @@ CODE"""
     assert task.meta == {}
 
 def test_task_task1():
-    task = wdl_document.task('task1')
+    task = wdl_namespace.resolve('task1')
     assert task.name == 'task1'
     assert len(task.declarations) == 2
     assert task.declarations[0].name == 'infile'
@@ -133,7 +133,7 @@ def test_task_task1():
     def lookup(name):
         if name == 'infile': return WdlString('/x/y/z.txt')
 
-    assert task.command.instantiate(lookup) == """grep '^aberran' /x/y/z.txt"""
+    assert task.command.instantiate(lookup) == "grep '^aberran' /x/y/z.txt"
 
     assert len(task.outputs) == 2
     assert task.outputs[0].name == 'words_a'
@@ -151,3 +151,31 @@ def test_task_task1():
     assert task.runtime['docker'].eval(lookup) == WdlString('foo/bar')
     assert task.parameter_meta == {}
     assert task.meta == {}
+
+def test_fqn_and_upstream():
+    wdl_namespace = wdl.loads("""
+task t1 {
+  Int i
+  Int j
+  command { echo ${i+1} }
+  output { Int o = read_int(stdout()) }
+}
+
+workflow w {
+  call t1
+  call t1 as x {input: i=t1.o+10}
+  call t1 as y {input: i=10+x.o, j=t1.o}
+}
+""")
+    call_t1 = wdl_namespace.resolve('w.t1')
+    call_x = wdl_namespace.resolve('w.x')
+    call_y = wdl_namespace.resolve('w.y')
+    assert call_t1.name == 't1'
+    assert call_x.name == 'x'
+    assert call_y.name == 'y'
+    assert call_t1.upstream() == set()
+    assert call_x.upstream() == set([call_t1])
+    assert call_y.upstream() == set([call_t1, call_x])
+    assert call_t1.downstream() == set([call_x, call_y])
+    assert call_x.downstream() == set([call_y])
+    assert call_y.downstream() == set()

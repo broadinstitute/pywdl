@@ -5,6 +5,7 @@ from wdl.values import *
 import os
 import json
 import re
+import inspect
 
 def scope_hierarchy(scope):
     if scope is None: return []
@@ -24,20 +25,20 @@ class FullyQualifiedName(object):
 class WdlNamespace(object):
     def __init__(self, source_location, source_wdl, tasks, workflows, ast):
         self.__dict__.update(locals())
-    def task(self, name):
-        for task in self.tasks:
-            if task.name == name: return task
-        raise TaskNotFoundException("Could not find task with name {}".format(name))
+        self.fully_qualified_name = ''
     def resolve(self, fqn):
-        # TODO: finish
         try:
             (name, sub_fqn) = fqn.split('.', 1)
         except ValueError:
             (name, sub_fqn) = (fqn, '')
 
-        for task in tasks:
-            if task.name == name and sub_fqn == '': return FullyQualifiedName(fqn, task)
-            if workflow.name == name and sub_fqn == '': return FullyQualifiedName(fqn, workflow)
+        for task in self.tasks:
+            if task.name == name and sub_fqn == '': return task
+        for workflow in self.workflows:
+            if workflow.name == name:
+                if sub_fqn == '': return workflow
+                else: return workflow.resolve(fqn)
+        return None
     def __str__(self):
         return '[WdlNamespace tasks={} workflows={}]'.format(
             ','.join([t.name for t in self.tasks]),
@@ -76,7 +77,7 @@ class Command(object):
                 if isinstance(value, WdlValue) and isinstance(value.type, WdlPrimitiveType):
                     value = value.as_string()
                 elif isinstance(value, WdlArray) and isinstance(value.subtype, WdlPrimitiveType) and 'sep' in part.attributes:
-                    value = parts.attributes['sep'].join(x.as_string() for x in value)
+                    value = part.attributes['sep'].join(x.as_string() for x in value.value)
                 else:
                     raise EvalException('Could not string-ify: {}'.format(value))
                 cmd.append(value)
@@ -112,6 +113,7 @@ class Scope(object):
         self.parent = None
         for element in body:
             element.parent = self
+    def upstream(self): return []
     def __getattr__(self, name):
         if name == 'fully_qualified_name':
             if self.parent is None:
@@ -132,7 +134,7 @@ class Workflow(Scope):
     def __init__(self, name, declarations, body, ast):
         self.__dict__.update(locals())
         super(Workflow, self).__init__(name, declarations, body)
-    def get(self, fqn):
+    def resolve(self, fqn):
         def get_r(node, fqn):
             if node.fully_qualified_name == fqn:
                 return node
@@ -147,12 +149,17 @@ class Call(Scope):
         self.__dict__.update(locals())
         super(Call, self).__init__(alias if alias else task.name, [], [])
     def upstream(self):
-        # TODO: this assumes MemberAccess always refers to other calls
-        up = []
+        up = set()
         for expression in self.inputs.values():
             for node in wdl.find_asts(expression.ast, "MemberAccess"):
-                up.append(node.attr('lhs').source_string)
+                fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
+                up.add(self.parent.resolve(fqn))
         return up
+    def downstream(self):
+        down = set()
+        for call in self.parent.calls():
+            if self in call.upstream(): down.add(call)
+        return down
     def get_scatter_parent(self, node=None):
         for parent in scope_hierarchy(self):
             if isinstance(parent, Scatter):
@@ -177,30 +184,10 @@ class Scatter(Scope):
     def __init__(self, item, collection, declarations, body, ast):
         self.__dict__.update(locals())
         super(Scatter, self).__init__('_s' + str(ast.id), declarations, body)
-    def get_flatten_count(self):
-        # TODO: revisit this algorithm
-        count = 0
-        collection = self.collection.ast.source_string
-        for node in scope_hierarchy(self):
-            if isinstance(node, Scatter):
-                if node.item == collection:
-                    collection = node.collection.ast.source_string
-                    count += 1
-            if isinstance(node, Scope):
-                for decl in node.declarations:
-                    if decl.name == collection:
-                        (var, type) = (decl.name, decl.type)
-                        for i in range(count):
-                            type = type.subtype
-                        return (var, type, count)
 
 class WorkflowOutputs(list):
     def __init__(self, arg=[]):
         super(WorkflowOutputs, self).__init__(arg)
-
-class WorkflowOutput:
-    def __init__(self, fqn, wildcard):
-        self.__dict__.update(locals())
 
 class WorkflowOutput:
     def __init__(self, fqn, wildcard):
@@ -425,6 +412,42 @@ unary_operators = [
     'LogicalNot', 'UnaryPlus', 'UnaryNegation'
 ]
 
+class WdlStandardLibraryFunctions:
+    # read a path, return its contents as a string
+    def read_file(self, wdl_file):
+        if os.path.exists(wdl_file.value):
+            with open(wdl_file.value) as fp:
+                return fp.read()
+        else:
+            raise EvalException('Path {} does not exist'.format(wdl_file.value))
+    def tsv(self, wdl_file):
+        lines = self.read_file(wdl_file).split('\n')
+        return [line.split('\t') for line in lines]
+    def single_param(self, params):
+        if len(params) == 1: return params[0]
+        else: raise EvalException('Expecting a single parameter, got: {}'.format(params))
+    def call(self, func_name, params):
+        methods = dict(inspect.getmembers(self.__class__, predicate=inspect.ismethod))
+        return methods[func_name](self, params)
+
+    def stdout(self, params): raise EvalException('stdout() not implemented')
+    def stderr(self, params): raise EvalException('stderr() not implemented')
+    def read_lines(self, params):
+        return WdlArray(WdlStringType(), [WdlString(x) for x in self.read_file(self.single_param(params)).split('\n')])
+    def read_string(self, params):
+        return WdlString(self.read_file(self.single_param(params)))
+    def read_int(self, params):
+        return WdlInteger(int(self.read_file(self.single_param(params))))
+    def read_map(self, params):
+        tsv = read_tsv(self.single_param(params))
+        if not all([len(row) == 2 for row in tsv]):
+            raise EvalException('read_map() expects the file {} to be a 2-column TSV'.format(self.single_param(params)))
+        return WdlMap(WdlStringType(), WdlStringType(), {
+            WdlString(row[0]): WdlString(row[1]) for row in tsv
+        })
+    def read_tsv(self, params):
+        table = tsv(self.single_param(params))
+
 def interpolate(string, lookup, functions):
     for expr_string in re.findall(r'\$\{.*?\}', string):
         expr = wdl.parse_expr(expr_string[2:-1])
@@ -433,10 +456,12 @@ def interpolate(string, lookup, functions):
     return string
 
 def eval(ast, lookup=lambda var: None, functions=None):
+    if isinstance(ast, Expression):
+        return eval(ast.ast, lookup, functions)
     if isinstance(ast, wdl.parser.Terminal):
         if ast.str == 'integer':
             return WdlInteger(int(ast.source_string))
-        if ast.str == 'float':
+        elif ast.str == 'float':
             return WdlFloat(float(ast.source_string))
         elif ast.str == 'string':
             return WdlString(interpolate(ast.source_string, lookup, functions))
@@ -510,7 +535,10 @@ def eval(ast, lookup=lambda var: None, functions=None):
         if ast.name == 'FunctionCall':
             function = ast.attr('name').source_string
             parameters = [eval(x, lookup, functions) for x in ast.attr('params')]
-            return functions(function)(parameters)
+            if isinstance(functions, WdlStandardLibraryFunctions):
+                return functions.call(function, parameters)
+            else:
+                raise EvalException('No functions defined')
 
 def expr_str(ast):
     if isinstance(ast, wdl.parser.Terminal):

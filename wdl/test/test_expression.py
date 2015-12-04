@@ -1,6 +1,7 @@
 import wdl
 import pytest
 from wdl.values import *
+from wdl.binding import WdlStandardLibraryFunctions
 
 static_expressions = [
     # Integers
@@ -281,16 +282,13 @@ def lookup(name):
     if name == "sudoers_f": return WdlFile("/sudoers")
     if name == "sudoers_s": return WdlString("/sudoers")
 
-def function(name):
-    def append(parameters):
+class TestWdlFunctions(WdlStandardLibraryFunctions):
+    def append(self, parameters):
         return WdlString(''.join([p.value for p in parameters]))
-    def b(parameters):
+    def b(self, parameters):
         return WdlInteger(parameters[0].value + 1)
-    if name == 'append': return append
-    elif name == 'b': return b
 
 @pytest.mark.parametrize("expression,value", identifier_expressions)
 def test_identifier_expressions(expression, value):
-    actual = wdl.parse_expr(expression).eval(lookup, function)
-    #print(actual.value, value.value)
+    actual = wdl.parse_expr(expression).eval(lookup, TestWdlFunctions())
     assert actual == value
