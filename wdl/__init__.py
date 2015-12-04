@@ -1,8 +1,12 @@
 from wdl.binding import parse_namespace, Expression
 import wdl.parser
 
-def load(fp, resource):
-    return parse_namespace(fp.read(), resource)
+def load(fp, resource=None):
+    try:
+        return parse_namespace(fp.read(), resource if resource is not None else fp.name)
+    except AttributeError:
+        with open(fp) as f:
+            return parse_namespace(f.read(), fp)
 
 def loads(s):
     return parse_namespace(s, "string")

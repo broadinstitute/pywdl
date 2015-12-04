@@ -157,6 +157,7 @@ def test_fqn_and_upstream():
 task t1 {
   Int i
   Int j
+  String foo = "bar"
   command { echo ${i+1} }
   output { Int o = read_int(stdout()) }
 }
@@ -179,3 +180,24 @@ workflow w {
     assert call_t1.downstream() == set([call_x, call_y])
     assert call_x.downstream() == set([call_y])
     assert call_y.downstream() == set()
+
+    decl_i = wdl_namespace.resolve('w.t1.i')
+    decl_i2 = wdl_namespace.resolve('w.t1.i')
+    decl_j = wdl_namespace.resolve('w.x.j')
+    decl_j2 = wdl_namespace.resolve('w.x.j')
+    decl_foo = wdl_namespace.resolve('w.y.foo')
+    assert decl_i.name == 'i'
+    assert decl_i.type == WdlIntegerType()
+    assert decl_i.expression == None
+    assert decl_i2.name == 'i'
+    assert decl_i2.type == WdlIntegerType()
+    assert decl_i2.expression == None
+    assert decl_j.name == 'j'
+    assert decl_j.type == WdlIntegerType()
+    assert decl_j.expression == None
+    assert decl_j2.name == 'j'
+    assert decl_j2.type == WdlIntegerType()
+    assert decl_j2.expression == None
+    assert decl_foo.name == 'foo'
+    assert decl_foo.type == WdlStringType()
+    assert decl_foo.expression.wdl_string() == '"bar"'

@@ -11,27 +11,31 @@ def scope_hierarchy(scope):
     if scope is None: return []
     return [scope] + scope_hierarchy(scope.parent)
 
+def fqn_head(fqn):
+    try:
+        (h, t) = tuple(fqn.split('.', 1))
+    except ValueError:
+        (h, t) = (fqn, '')
+    return (h, t)
+
+def fqn_tail(fqn):
+    try:
+        (h, t) = tuple(fqn.rsplit('.', 1))
+    except ValueError:
+        (h, t) = (fqn, '')
+    return (h, t)
+
 class BindingException(Exception): pass
 class TaskNotFoundException(Exception): pass
 class WdlValueException(Exception): pass
 class EvalException(Exception): pass
-
-class FullyQualifiedName(object):
-    def __init__(self, fqn, namespace):
-        self.__dict__.update(locals())
-    def __str__(self):
-        return '[FullyQualifiedName: {}, {}]'.format(self.fqn, str(namespace))
 
 class WdlNamespace(object):
     def __init__(self, source_location, source_wdl, tasks, workflows, ast):
         self.__dict__.update(locals())
         self.fully_qualified_name = ''
     def resolve(self, fqn):
-        try:
-            (name, sub_fqn) = fqn.split('.', 1)
-        except ValueError:
-            (name, sub_fqn) = (fqn, '')
-
+        (name, sub_fqn) = fqn_head(fqn)
         for task in self.tasks:
             if task.name == name and sub_fqn == '': return task
         for workflow in self.workflows:
@@ -136,8 +140,13 @@ class Workflow(Scope):
         super(Workflow, self).__init__(name, declarations, body)
     def resolve(self, fqn):
         def get_r(node, fqn):
+            (head, decl_name) = fqn_tail(fqn)
             if node.fully_qualified_name == fqn:
                 return node
+            if isinstance(node, Call) and node.fully_qualified_name == head:
+                for decl in node.task.declarations:
+                    if decl.name == decl_name:
+                        return decl
             for element in node.body:
                 if isinstance(element, Scope):
                     sub = get_r(element, fqn)
