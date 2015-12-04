@@ -427,7 +427,8 @@ class WdlStandardLibraryFunctions:
         if len(params) == 1: return params[0]
         else: raise EvalException('Expecting a single parameter, got: {}'.format(params))
     def call(self, func_name, params):
-        methods = dict(inspect.getmembers(self.__class__, predicate=inspect.ismethod))
+        # perhaps predicate=inspect.ismethod?
+        methods = dict(inspect.getmembers(self.__class__))
         return methods[func_name](self, params)
 
     def stdout(self, params): raise EvalException('stdout() not implemented')
