@@ -238,7 +238,7 @@ class WdlArray(WdlValue):
         self.subtype = subtype
         self.value = value
     def __str__(self):
-        return '[{}: {}]'.format(self.type, ', '.join([str(x) for x in self.value]))
+        return '[{}: {}]'.format(self.type.wdl_string(), ', '.join([str(x) for x in self.value]))
 
 class WdlMap(WdlValue):
     def __init__(self, key_type, value_type, value):

@@ -7,6 +7,11 @@ import json
 import re
 import inspect
 
+class WdlBindingException(Exception): pass
+class TaskNotFoundException(Exception): pass
+class WdlValueException(Exception): pass
+class EvalException(Exception): pass
+
 def scope_hierarchy(scope):
     if scope is None: return []
     return [scope] + scope_hierarchy(scope.parent)
@@ -25,10 +30,27 @@ def fqn_tail(fqn):
         (h, t) = (fqn, '')
     return (h, t)
 
-class BindingException(Exception): pass
-class TaskNotFoundException(Exception): pass
-class WdlValueException(Exception): pass
-class EvalException(Exception): pass
+def coerce(value, wdl_type):
+    if isinstance(wdl_type, WdlStringType):
+        return WdlString(str(value))
+    elif isinstance(wdl_type, WdlIntegerType):
+        return WdlInteger(int(value))
+    elif isinstance(wdl_type, WdlFileType):
+        return WdlFile(str(value))
+    elif isinstance(wdl_type, WdlArrayType):
+        return WdlArray(wdl_type.subtype, [coerce(x, wdl_type.subtype) for x in value])
+
+def coerce_inputs(namespace, inputs_dict):
+    coerced_inputs = {}
+    for k, v in inputs_dict.items():
+        decl = namespace.resolve(k)
+        if decl is None:
+            raise WdlBindingException("Fully-qualified name '{}' does not resolve to anything".format(k))
+        if not isinstance(decl, wdl.binding.Declaration):
+            raise WdlBindingException("Expecting '{}' to resolve to a declaration, got {}".format(k, decl))
+        value = coerce(v, decl.type)
+        coerced_inputs[k] = value
+    return coerced_inputs
 
 class WdlNamespace(object):
     def __init__(self, source_location, source_wdl, tasks, workflows, ast):
@@ -248,7 +270,7 @@ def parse_workflow(ast, tasks):
 
 def parse_runtime(ast):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'Runtime':
-        raise BindingException('Expecting a "Runtime" AST')
+        raise WdlBindingException('Expecting a "Runtime" AST')
     runtime = {}
     for attr in ast.attr('map'):
         runtime[attr.attr('key').source_string] = Expression(attr.attr('value'))
@@ -256,7 +278,7 @@ def parse_runtime(ast):
 
 def parse_declaration(ast):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'Declaration':
-        raise BindingException('Expecting a "Declaration" AST')
+        raise WdlBindingException('Expecting a "Declaration" AST')
     type = parse_type(ast.attr('type'))
     name = ast.attr('name').source_string
     expression = Expression(ast.attr('expression')) if ast.attr('expression') else None
@@ -274,7 +296,7 @@ def parse_body_element(ast, tasks):
     elif ast.name == 'WorkflowOutputs':
         return parse_workflow_outputs(ast)
     else:
-        raise BindingException("unknown ast: " + ast.name)
+        raise WdlBindingException("unknown ast: " + ast.name)
 
 def parse_while_loop(ast, tasks):
     expression = Expression(ast.attr('expression'))
@@ -307,7 +329,7 @@ def parse_workflow_output(ast):
 
 def parse_call(ast, tasks):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'Call':
-        raise BindingException('Expecting a "Call" AST')
+        raise WdlBindingException('Expecting a "Call" AST')
     task_name = ast.attr('task').source_string
     alias = ast.attr('alias').source_string if ast.attr('alias') else None
 
@@ -316,7 +338,7 @@ def parse_call(ast, tasks):
             break
 
     if task is None:
-        raise BindingException('Could not find task with name: ' + task_name)
+        raise WdlBindingException('Could not find task with name: ' + task_name)
 
     inputs = {}
     try:
@@ -335,7 +357,7 @@ def parse_command_line_expr_attrs(ast):
 
 def parse_command_line_expr(ast):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'CommandParameter':
-        raise BindingException('Expecting a "CommandParameter" AST')
+        raise WdlBindingException('Expecting a "CommandParameter" AST')
     return CommandExpressionTag(
         parse_command_line_expr_attrs(ast.attr('attributes')),
         Expression(ast.attr('expr')),
@@ -344,7 +366,7 @@ def parse_command_line_expr(ast):
 
 def parse_command(ast):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'RawCommand':
-        raise BindingException('Expecting a "RawCommand" AST')
+        raise WdlBindingException('Expecting a "RawCommand" AST')
     parts = []
     for node in ast.attr('parts'):
         if isinstance(node, wdl.parser.Terminal):
@@ -355,7 +377,7 @@ def parse_command(ast):
 
 def parse_output(ast):
     if not isinstance(ast, wdl.parser.Ast) or ast.name != 'Output':
-        raise BindingException('Expecting an "Output" AST')
+        raise WdlBindingException('Expecting an "Output" AST')
     type = parse_type(ast.attr('type'))
     var = ast.attr('var').source_string
     expression = Expression(ast.attr('expression'))
@@ -364,28 +386,28 @@ def parse_output(ast):
 def parse_type(ast):
     if isinstance(ast, wdl.parser.Terminal):
         if ast.str != 'type':
-            raise BindingException('Expecting an "Type" AST')
+            raise WdlBindingException('Expecting an "Type" AST')
         if ast.source_string == 'Int': return WdlIntegerType()
         elif ast.source_string == 'Boolean': return WdlBooleanType()
         elif ast.source_string == 'Float': return WdlFloatType()
         elif ast.source_string == 'String': return WdlStringType()
         elif ast.source_string == 'File': return WdlFileType()
         elif ast.source_string == 'Uri': return WdlUriType()
-        else: raise BindingException("Unsupported Type: {}".format(ast.source_string))
+        else: raise WdlBindingException("Unsupported Type: {}".format(ast.source_string))
     elif isinstance(ast, wdl.parser.Ast) and ast.name == 'Type':
         name = ast.attr('name').source_string
         if name == 'Array':
             subtypes = ast.attr('subtype')
             if len(subtypes) != 1:
-                raise BindingException("Expecting only one subtype AST")
+                raise WdlBindingException("Expecting only one subtype AST")
             return WdlArrayType(parse_type(subtypes[0]))
         if name == 'Map':
             subtypes = ast.attr('subtype')
             if len(subtypes) != 2:
-                raise BindingException("Expecting only two subtype AST")
+                raise WdlBindingException("Expecting only two subtype AST")
             return WdlMapType(parse_type(subtypes[0]), parse_type(subtypes[1]))
     else:
-        raise BindingException('Expecting an "Type" AST')
+        raise WdlBindingException('Expecting an "Type" AST')
 
 def python_to_wdl_value(py_value, wdl_type):
     if isinstance(wdl_type, WdlStringType):
