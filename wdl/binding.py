@@ -140,6 +140,7 @@ class Scope(object):
         for element in body:
             element.parent = self
     def upstream(self): return []
+    def downstream(self): return []
     def __getattr__(self, name):
         if name == 'fully_qualified_name':
             if self.parent is None:
@@ -148,13 +149,23 @@ class Scope(object):
     def calls(self):
         def calls_r(node):
             if isinstance(node, Call):
-                return [node]
+                return set([node])
             if isinstance(node, Scope):
-                call_list = []
+                call_list = set()
                 for element in node.body:
-                    call_list.extend(calls_r(element))
+                    call_list.update(calls_r(element))
                 return call_list
         return calls_r(self)
+    def scopes(self):
+        def scopes_r(node):
+            if isinstance(node, Call):
+                return set([node])
+            if isinstance(node, Scope):
+                scopes = set([node])
+                for element in node.body:
+                    scopes.update(scopes_r(element))
+                return scopes
+        return scopes_r(self)
 
 class Workflow(Scope):
     def __init__(self, name, declarations, body, ast):
@@ -179,17 +190,27 @@ class Call(Scope):
     def __init__(self, task, alias, inputs, ast):
         self.__dict__.update(locals())
         super(Call, self).__init__(alias if alias else task.name, [], [])
+    def __getattr__(self, name):
+        if name == 'fully_qualified_name':
+	    parent_fqn = self.parent.fully_qualified_name
+	    parent_fqn = re.sub(r'\._[sw]\d+', '', parent_fqn)
+	    return '{}.{}'.format(parent_fqn, self.name)
     def upstream(self):
         up = set()
+        for scope in scope_hierarchy(self):
+            if isinstance(scope, Scatter):
+                up.add(scope)
+                up.update(scope.upstream())
         for expression in self.inputs.values():
             for node in wdl.find_asts(expression.ast, "MemberAccess"):
                 fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
                 up.add(self.parent.resolve(fqn))
         return up
     def downstream(self):
+        root = scope_hierarchy(self)[-1]
         down = set()
-        for call in self.parent.calls():
-            if self in call.upstream(): down.add(call)
+        for scope in root.scopes():
+            if self in scope.upstream(): down.add(scope)
         return down
     def get_scatter_parent(self, node=None):
         for parent in scope_hierarchy(self):
@@ -215,6 +236,17 @@ class Scatter(Scope):
     def __init__(self, item, collection, declarations, body, ast):
         self.__dict__.update(locals())
         super(Scatter, self).__init__('_s' + str(ast.id), declarations, body)
+    def downstream(self):
+        down = set(self.scopes())
+        down.discard(self)
+        return down
+    def upstream(self):
+        root = scope_hierarchy(self)[-1]
+        up = set()
+        for node in wdl.find_asts(self.collection.ast, "MemberAccess"):
+            fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
+            up.add(self.parent.resolve(fqn))
+        return up
 
 class WorkflowOutputs(list):
     def __init__(self, arg=[]):
