@@ -244,6 +244,7 @@ workflow w {
     call_t2 = wdl_namespace.resolve('w.t2')
     call_t3 = wdl_namespace.resolve('w.t3')
     scatter = wdl_namespace.resolve('w._s7')
+    assert call_t2.task.declarations[1].wdl_string() == 'Array[String] s = ["a", "b", "c"]'
     assert call_t1.name == 't1'
     assert call_t2.name == 't2'
     assert call_t3.name == 't3'

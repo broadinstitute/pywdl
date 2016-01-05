@@ -30,16 +30,6 @@ def fqn_tail(fqn):
         (h, t) = (fqn, '')
     return (h, t)
 
-def coerce(value, wdl_type):
-    if isinstance(wdl_type, WdlStringType):
-        return WdlString(str(value))
-    elif isinstance(wdl_type, WdlIntegerType):
-        return WdlInteger(int(value))
-    elif isinstance(wdl_type, WdlFileType):
-        return WdlFile(str(value))
-    elif isinstance(wdl_type, WdlArrayType):
-        return WdlArray(wdl_type.subtype, [coerce(x, wdl_type.subtype) for x in value])
-
 def coerce_inputs(namespace, inputs_dict):
     coerced_inputs = {}
     for k, v in inputs_dict.items():
@@ -105,7 +95,7 @@ class Command(object):
                 elif isinstance(value, WdlArray) and isinstance(value.subtype, WdlPrimitiveType) and 'sep' in part.attributes:
                     value = part.attributes['sep'].join(x.as_string() for x in value.value)
                 else:
-                    raise EvalException('Could not string-ify: {}'.format(value))
+                    raise EvalException('Could not string-ify part {}: {}'.format(part, value))
                 cmd.append(value)
         return wdl.util.strip_leading_ws(''.join(cmd))
     def wdl_string(self):
@@ -119,7 +109,7 @@ class CommandExpressionTag(CommandPart):
     def __init__(self, attributes, expression, ast):
         self.__dict__.update(locals())
     def wdl_string(self):
-        attr_string = ', '.join(self.attributes)
+        attr_string = ', '.join(['{}={}'.format(k, v) for k, v in self.attributes.items()])
         return '${' + '{}{}'.format(attr_string, self.expression.wdl_string()) + '}'
     def __str__(self):
         return '[CommandExpressionTag: {}]'.format(self.wdl_string())
@@ -196,15 +186,16 @@ class Call(Scope):
 	    parent_fqn = re.sub(r'\._[sw]\d+', '', parent_fqn)
 	    return '{}.{}'.format(parent_fqn, self.name)
     def upstream(self):
+        hierarchy = scope_hierarchy(self)
         up = set()
-        for scope in scope_hierarchy(self):
+        for scope in hierarchy:
             if isinstance(scope, Scatter):
                 up.add(scope)
                 up.update(scope.upstream())
         for expression in self.inputs.values():
             for node in wdl.find_asts(expression.ast, "MemberAccess"):
                 fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
-                up.add(self.parent.resolve(fqn))
+                up.add(hierarchy[-1].resolve(fqn))
         return up
     def downstream(self):
         root = scope_hierarchy(self)[-1]
@@ -573,6 +564,9 @@ def eval(ast, lookup=lambda var: None, functions=None):
                     raise EvalException('Cannot evaluate expression')
                 obj.set(key, value)
             return obj
+        if ast.name == 'ArrayLiteral':
+            values = [eval(x, lookup, functions) for x in ast.attr('values')]
+            return WdlArray(values[0].type, values)
         if ast.name == 'ArrayOrMapLookup':
             array_or_map = eval(ast.attr('lhs'), lookup, functions)
             index = eval(ast.attr('rhs'), lookup, functions)
@@ -644,3 +638,5 @@ def expr_str(ast):
             return '{}[{}]'.format(expr_str(ast.attr('lhs')), expr_str(ast.attr('rhs')))
         if ast.name == 'MemberAccess':
             return '{}.{}'.format(expr_str(ast.attr('lhs')), expr_str(ast.attr('rhs')))
+        if ast.name == 'ArrayLiteral':
+            return '[{}]'.format(', '.join(expr_str(x) for x in ast.attr('values')))

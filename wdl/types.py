@@ -1,3 +1,9 @@
+import wdl.binding
+
+def parse(string):
+    ctx = wdl.parser.ParserContext(wdl.parser.lex(string, 'string'), wdl.parser.DefaultSyntaxErrorHandler())
+    return wdl.binding.parse_type(wdl.parser.parse_type_e(ctx).ast())
+
 class WdlType: pass
 
 class WdlPrimitiveType(WdlType):
@@ -26,9 +32,6 @@ class WdlStringType(WdlPrimitiveType):
 class WdlFileType(WdlPrimitiveType):
     def wdl_string(self): return 'File'
 
-class WdlUriType(WdlPrimitiveType):
-    def wdl_string(self): return 'Uri'
-
 class WdlArrayType(WdlCompoundType):
     def __init__(self, subtype):
         self.subtype = subtype
@@ -39,6 +42,8 @@ class WdlArrayType(WdlCompoundType):
 class WdlMapType(WdlCompoundType):
     def __init__(self, key_type, value_type):
         self.__dict__.update(locals())
+    def __eq__(self, other):
+        return isinstance(other, WdlMapType) and other.key_type == self.key_type and other.value_type == self.value_type
     def wdl_string(self): return 'Map[{0}, {1}]'.format(self.key_type.wdl_string(), self.value_type.wdl_string())
 
 class WdlObjectType(WdlCompoundType):

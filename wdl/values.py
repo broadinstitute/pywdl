@@ -1,8 +1,19 @@
 from wdl.types import *
 
+class CoercionException(Exception): pass
 class EvalException(Exception): pass
 
 def assert_type(value, types): return value.type.__class__  in types
+
+def coerce(value, wdl_type):
+    if isinstance(wdl_type, WdlArrayType):
+        return WdlArray.coerce(value, wdl_type.subtype)
+    if isinstance(wdl_type, WdlStringType): return WdlString.coerce(value)
+    if isinstance(wdl_type, WdlIntegerType): return WdlInteger.coerce(value)
+    if isinstance(wdl_type, WdlFloatType): return WdlFloat.coerce(value)
+    if isinstance(wdl_type, WdlBooleanType): return WdlBoolean.coerce(value)
+    if isinstance(wdl_type, WdlFileType): return WdlFile.coerce(value)
+    raise CoercionException("Could not coerce {} into a WDL {}".format(value, wdl_type.wdl_string()))
 
 class WdlValue(object):
     def __init__(self, value):
@@ -14,8 +25,10 @@ class WdlValue(object):
     def __str__(self): return '[Wdl{}: {}]'.format(self.type.wdl_string(), self.as_string())
     def __eq__(self, rhs): return (self.__class__, self.value) == (rhs.__class__, rhs.value)
     def __hash__(self): return hash((self.__class__, self.value))
-    def __invalid(self, symbol, rhs): raise EvalException('Cannot perform operation: {} {} {}'.format(self.type.wdl_string(), symbol, rhs.type.wdl_string()))
-    def __invalid_unary(self, symbol): raise EvalException('Cannot perform operation: {} {}'.format(symbol, self.type.wdl_string()))
+    def __invalid(self, symbol, rhs):
+        raise EvalException('Cannot perform operation: {} {} {}'.format(self.type.wdl_string(), symbol, rhs.type.wdl_string()))
+    def __invalid_unary(self, symbol):
+        raise EvalException('Cannot perform operation: {} {}'.format(symbol, self.type.wdl_string()))
     def add(self, rhs): return self.__invalid('+', rhs)
     def subtract(self, rhs): return self.__invalid('-', rhs)
     def multiply(self, rhs): return self.__invalid('*', rhs)
@@ -50,6 +63,14 @@ class WdlString(WdlValue):
             pass
         if not isinstance(value, str):
             raise EvalException("WdlString must hold a python 'str': {} ({})".format(value, value.__class__))
+
+    @staticmethod
+    def coerce(value):
+        if isinstance(value, WdlString): return value
+        if value.__class__ in [WdlString, WdlInteger, WdlFloat, WdlFile]: return WdlString(str(value.value))
+        if value.__class__ in [str, int, float]: return WdlString(str(value))
+        raise CoercionException('Could not coerce {} into a WDL String'.format(value))
+
     def add(self, rhs):
         if assert_type(rhs, [WdlIntegerType, WdlFloatType, WdlStringType, WdlFileType]):
             return WdlString(self.value + str(rhs.value))
@@ -72,6 +93,17 @@ class WdlInteger(WdlValue):
     def check_compatible(self, value):
         if not isinstance(value, int):
             raise EvalException("WdlInteger must hold a python 'int'")
+
+    @staticmethod
+    def coerce(value):
+        if isinstance(value, WdlString): value = value.value
+        if isinstance(value, WdlInteger): return value
+        if isinstance(value, int): return WdlInteger(value)
+        if isinstance(value, str):
+            try: return WdlInteger(int(value))
+            except ValueError: raise CoercionException('Could not coerce string {} into a WDL Integer'.format(value))
+        raise CoercionException('Could not coerce {} into a WDL Integer'.format(value))
+
     def add(self, rhs):
         if assert_type(rhs, [WdlIntegerType]):
             return WdlInteger(self.value + rhs.value)
@@ -126,6 +158,15 @@ class WdlBoolean(WdlValue):
     def check_compatible(self, value):
         if not isinstance(value, bool):
             raise EvalException("WdlBoolean must hold a python 'bool'")
+
+    @staticmethod
+    def coerce(value):
+        if isinstance(value, WdlBoolean): return value
+        if value in [True, False]: return WdlBoolean(value)
+        if isinstance(value, str) and value.lower() in ['true', 'false']:
+            return WdlBoolean(value.lower() == 'true')
+        raise CoercionException('Could not coerce {} into a WDL Boolean'.format(value))
+
     def greater_than(self, rhs):
         if assert_type(rhs, [WdlBooleanType]):
             return WdlBoolean(self.value > rhs.value)
@@ -154,6 +195,18 @@ class WdlFloat(WdlValue):
     def check_compatible(self, value):
         if not isinstance(value, float):
             raise EvalException("WdlFloat must hold a python 'float'")
+
+    @staticmethod
+    def coerce(value):
+        if isinstance(value, WdlString): value = value.value
+        if isinstance(value, WdlFloat): return value
+        if isinstance(value, float): return WdlFloat(value)
+        if isinstance(value, int): return WdlFloat(float(value))
+        if isinstance(value, str):
+            try: return WdlFloat(float(value))
+            except ValueError: raise CoercionException('Could not coerce string {} into a WDL Float'.format(value))
+        raise CoercionException('Could not coerce {} into a WDL Float'.format(value))
+
     def add(self, rhs):
         if assert_type(rhs, [WdlIntegerType, WdlFloatType]):
             return WdlFloat(self.value + rhs.value)
@@ -206,6 +259,14 @@ class WdlFile(WdlString):
             pass
         if not isinstance(value, str):
             raise EvalException("WdlString must hold a python 'str': {} ({})".format(value, value.__class__))
+
+    @staticmethod
+    def coerce(value):
+        if isinstance(value, WdlFile): return value
+        if isinstance(value, WdlString): return WdlFile(value.value)
+        if isinstance(value, str): return WdlFile(value)
+        raise CoercionException('Could not coerce {} into a WDL File'.format(value))
+
     def add(self, rhs):
         if assert_type(rhs, [WdlFileType, WdlStringType]):
             return WdlFile(self.value + str(rhs.value))
@@ -223,11 +284,6 @@ class WdlFile(WdlString):
             return WdlBoolean(self.value < rhs.value)
         super(WdlFile, self).equal(rhs)
 
-class WdlUri(WdlValue):
-    type = WdlUriType()
-    def check_compatible(self, value):
-        pass # TODO: implement
-
 class WdlArray(WdlValue):
     def __init__(self, subtype, value):
         if not isinstance(value, list):
@@ -237,6 +293,20 @@ class WdlArray(WdlValue):
         self.type = WdlArrayType(subtype)
         self.subtype = subtype
         self.value = value
+
+    @staticmethod
+    def coerce(value, subtype):
+        if isinstance(value, WdlArray): value = value.value
+        if not isinstance(value, list):
+            raise CoercionException('Only lists can be coerced into a WDL Arrays (got {})'.format(value))
+
+        try:
+            return WdlArray(subtype, [coerce(x, subtype) for x in value])
+        except CoercionException as e:
+            raise CoercionException('Could not coerce {} into a WDL Array[{}]. {}'.format(value, subtype.wdl_string(), e))
+
+        raise CoercionException('Could not coerce {} into a WDL Array[{}]'.format(value, subtype.wdl_string()))
+
     def __str__(self):
         return '[{}: {}]'.format(self.type.wdl_string(), ', '.join([str(x) for x in self.value]))
 
