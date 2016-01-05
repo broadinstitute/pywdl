@@ -182,9 +182,9 @@ class Call(Scope):
         super(Call, self).__init__(alias if alias else task.name, [], [])
     def __getattr__(self, name):
         if name == 'fully_qualified_name':
-	    parent_fqn = self.parent.fully_qualified_name
-	    parent_fqn = re.sub(r'\._[sw]\d+', '', parent_fqn)
-	    return '{}.{}'.format(parent_fqn, self.name)
+            parent_fqn = self.parent.fully_qualified_name
+            parent_fqn = re.sub(r'\._[sw]\d+', '', parent_fqn)
+            return '{}.{}'.format(parent_fqn, self.name)
     def upstream(self):
         hierarchy = scope_hierarchy(self)
         up = set()
