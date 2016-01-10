@@ -257,3 +257,48 @@ workflow w {
     assert call_t2.downstream() == set([call_t3, scatter])
     assert call_t3.downstream() == set()
     assert scatter.downstream() == set([call_t3])
+
+def test_beyond_scatter_upstream_downstream():
+    wdl_namespace = wdl.loads("""
+task t1 {
+  File i
+  String pattern
+  command { grep '${pattern}' ${i} > "filtered" }
+  output { File filtered = "filtered" }
+}
+
+task t2 {
+  File i
+  Array[String] s = ["a", "b", "c"]
+  command {
+    cat ${i} > out_file
+    echo -e "${sep="\\n" s}" >> out_file
+  }
+  output { Array[String] strings = read_lines("out_file") }
+}
+
+task t3 {
+  String x
+  command {echo ${x}}
+  output { String y = read_string(stdout()) }
+}
+
+workflow w {
+  call t1
+  call t2 {
+    input: i=t1.filtered
+  }
+  Array[String] s = ["a", "b", "c"]
+  scatter(n in s) {
+    call t3 {
+      input: x=t2.strings
+    }
+  }
+}
+""")
+
+    call_t1 = wdl_namespace.resolve('w.t1')
+    call_t2 = wdl_namespace.resolve('w.t2')
+    call_t3 = wdl_namespace.resolve('w.t3')
+    scatter = call_t3.parent
+    assert call_t3.upstream() == set([call_t2, scatter])
