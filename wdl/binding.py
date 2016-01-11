@@ -247,7 +247,7 @@ class Scatter(Scope):
             up_val = None
             while parent and not up_val:
                 fqn = '{}.{}'.format(parent.name, lhs_expr)
-                up_val = hierarchy[-1].resolve(fqn)
+                up_val = root.resolve(fqn)
                 parent = parent.parent
             if up_val:
                 up.add(up_val)
