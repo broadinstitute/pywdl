@@ -194,8 +194,15 @@ class Call(Scope):
                 up.update(scope.upstream())
         for expression in self.inputs.values():
             for node in wdl.find_asts(expression.ast, "MemberAccess"):
-                fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
-                up.add(hierarchy[-1].resolve(fqn))
+                lhs_expr = expr_str(node.attr('lhs'))
+                parent = self.parent
+                up_val = None
+                while parent and not up_val:
+                    fqn = '{}.{}'.format(parent.name, lhs_expr)
+                    up_val = hierarchy[-1].resolve(fqn)
+                    parent = parent.parent
+                if up_val:
+                    up.add(up_val)
         return up
     def downstream(self):
         root = scope_hierarchy(self)[-1]
@@ -235,8 +242,15 @@ class Scatter(Scope):
         root = scope_hierarchy(self)[-1]
         up = set()
         for node in wdl.find_asts(self.collection.ast, "MemberAccess"):
-            fqn = '{}.{}'.format(self.parent.name, expr_str(node.attr('lhs')))
-            up.add(self.parent.resolve(fqn))
+            lhs_expr = expr_str(node.attr('lhs'))
+            parent = self.parent
+            up_val = None
+            while parent and not up_val:
+                fqn = '{}.{}'.format(parent.name, lhs_expr)
+                up_val = root.resolve(fqn)
+                parent = parent.parent
+            if up_val:
+                up.add(up_val)
         return up
 
 class WorkflowOutputs(list):
