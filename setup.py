@@ -16,6 +16,7 @@ setup(
   ],
   scripts={
       'scripts/wdl',
+      'scripts/wdl2dot'
   },
   license = 'MIT',
   keywords = "Workflow, Task",

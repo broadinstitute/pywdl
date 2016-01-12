@@ -357,7 +357,7 @@ $ wdl parse examples/ex2.wdl
 A wdl file can be converted to the dot format in order to be able to visualize the pipeline as a graph. For example:
 
 ```
-$ python scripts/wdl2dot.py -i hello.wdl -o hello.dot
+$ wdl2dot -i hello.wdl -o hello.dot
 ```
 
 Then use interactive renderer xdot or save to an image:
