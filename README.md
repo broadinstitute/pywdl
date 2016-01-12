@@ -17,6 +17,7 @@ For Scala language bindings, use [Cromwell](http://github.com/broadinstitute/cro
     * [wdl.parser.AstList](#wdlparserastlist)
   * [Working with expressions](#working-with-expressions)
 * [Command Line Usage](#command-line-usage)
+* [Converting to DOT](#converting-to-dot)
 
 <!---toc end-->
 
@@ -349,4 +350,19 @@ $ wdl parse examples/ex2.wdl
       sections=[
         (RawCommand:
 ...
+```
+
+# Converting To DOT
+
+A wdl file can be converted to the dot format in order to be able to visualize the pipeline as a graph. For example:
+
+```
+$ python scripts/wdl2dot.py -i hello.wdl -o hello.dot
+```
+
+Then use interactive renderer xdot or save to an image:
+
+```
+$ xdot hello.dot
+$ dot -Tsvg hello.dot -o hello.svg
 ```
