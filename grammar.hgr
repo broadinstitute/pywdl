@@ -137,9 +137,9 @@ grammar {
       r'\+' -> :plus
       r'\*' -> :asterisk
       r'[0-9]+' -> :integer
+      r'{%_identifier%}(?=\s*=)' -> :cmd_attr_hint[] :identifier
       r'(true|false)(?!{%_identifier_follow%})' -> :boolean
       r'{%_type%}(?!{%_identifier_follow%})' -> :type
-      r'{%_identifier%}(?=\s*=)' -> :cmd_attr_hint[] :identifier
       r'{%_identifier%}' -> :identifier
 
       # Expression tokens
@@ -217,11 +217,11 @@ grammar {
         for regex, c in ctx.user_context['replacements'].items():
             source_string = regex.sub(chr(c), source_string)
 
-        source_string = source_string.replace("\\\\", "\\")
+        source_string = source_string.replace("\u005C\u005C", "\u005C")
 
         for regex, base in ctx.user_context['escapes'].items():
             for escape_sequence, number in regex.findall(source_string):
-                source_string = source_string.replace(escape_sequence, unichr(int(number, base)))
+                source_string = source_string.replace(escape_sequence, chr(int(number, base)))
         default_action(ctx, terminal, source_string[1:-1], line, col)
     PYTHON
 
@@ -329,7 +329,7 @@ grammar {
     $call_input = :input :colon list($mapping, :comma) -> Inputs(map=$2)
     $mapping = :identifier :equal $e -> IOMapping(key=$0, value=$2)
     $alias = :as :identifier -> $1
-    $wf_outputs = :output :lbrace list($wf_output, :comma) :rbrace -> WorkflowOutputs(outputs=$2)
+    $wf_outputs = :output :lbrace list($wf_output) :rbrace -> WorkflowOutputs(outputs=$2)
     $wf_output = :fqn optional($wf_output_wildcard) -> WorkflowOutput(fqn=$0, wildcard=$1)
     $wf_output_wildcard = :dot :asterisk -> $1
 
