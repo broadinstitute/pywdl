@@ -1,6 +1,6 @@
 from setuptools import setup
 
-version = '1.0.20'
+version = '1.0.21'
 long_description = 'Parse and Process WDL Files'
 
 setup(

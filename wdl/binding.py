@@ -140,21 +140,25 @@ class Scope(object):
         def calls_r(node):
             if isinstance(node, Call):
                 return set([node])
-            if isinstance(node, Scope):
+            elif isinstance(node, Scope):
                 call_list = set()
                 for element in node.body:
                     call_list.update(calls_r(element))
                 return call_list
+            else:
+                return set()
         return calls_r(self)
     def scopes(self):
         def scopes_r(node):
             if isinstance(node, Call):
                 return set([node])
-            if isinstance(node, Scope):
+            elif isinstance(node, Scope):
                 scopes = set([node])
                 for element in node.body:
                     scopes.update(scopes_r(element))
                 return scopes
+            else:
+                return set()
         return scopes_r(self)
 
 class Workflow(Scope):
