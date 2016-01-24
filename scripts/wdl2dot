@@ -17,6 +17,7 @@ def run():
 
 	output = open(args.output_file, 'w')
 	output.write('digraph {\n')
+	output.write('node [style=filled bgcolor="0 1 1"]\n')
 
 	links = []
 	scatter_nodes = set()
@@ -33,12 +34,14 @@ def run():
 		for parent in reversed(scope_hierarchy(scatter)):
 			if not isinstance(parent, Workflow):
 				output.write('subgraph cluster_%s {\n' % parent.name)
+				output.write('style=filled;')
+				output.write('fillcolor=lightgrey;penwidth=4;\n')
 
 		call_nodes = [call.name for call in scatter.upstream() if isinstance(call, Call)]
-		if call_nodes:
-			output.write('edge [style=invis]\n')
-			output.write('"%s_label" [margin=0 shape="none" label="%s"]\n' % (scatter.name, '\\n'.join(call_nodes)))
-
+		output.write('edge [style=invis]\n')
+		name = lambda: '\\n'.join(call_nodes) if call_nodes else scatter.collection.wdl_string()
+		output.write('"%s_label" [margin=.1 shape="none" label="%s" peripheries=2]\n' % (scatter.name, name()))
+		
 		for downstream in scatter.downstream():
 			if isinstance(downstream, Call):
 				output.write('\t"%s"\n' % downstream.name)
@@ -49,8 +52,16 @@ def run():
 			if not isinstance(parent, Workflow):
 				output.write('}\n')
 
+	(headnodes, tailnodes) = zip(*links)
+
 	for from_node, to_node in links:
 		output.write('"%s"->"%s"\n' % (from_node, to_node))
+		#if a node is not in tailnodes, it is a "primary node"
+		if from_node not in tailnodes :
+			output.write('"%s" [style=filled,fillcolor=".7 .3 1.0"]\n' % from_node)
+		#if a node is not in headnodes, it is a "terminal node"
+		if to_node not in headnodes :
+			output.write('"%s" [style=filled,fillcolor=".3 .7 1.0"]\n' % to_node)
 
 	output.write('labelloc="t"\n')
 	#TODO: If there are multiple workflows this only uses the first for the title of the graph
