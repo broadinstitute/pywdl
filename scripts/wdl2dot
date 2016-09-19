@@ -63,6 +63,11 @@ def run():
 		if to_node not in headnodes :
 			output.write('"%s" [style=filled,fillcolor=".3 .7 1.0"]\n' % to_node)
 
+	for workflow in wdl_namespace.workflows:
+		for call in workflow.calls():
+			if call.name not in tailnodes and call.name not in headnodes:
+				output.write('"%s"\n' % call.name)
+
 	output.write('labelloc="t"\n')
 	#TODO: If there are multiple workflows this only uses the first for the title of the graph
 	output.write('label="%s"\n' % wdl_namespace.workflows[0].name)
