@@ -6,7 +6,7 @@ DEPRECATION NOTICE: This project is not being maintained nor supported for now. 
 
 A Python implementation of a WDL parser and language bindings.
 
-For Scala language bindings, use [Cromwell](http://github.com/broadinstitute/cromwell).
+For Scala language bindings, use [WDL4S](http://github.com/broadinstitute/wdl4s).
 
 <!---toc start-->
 
