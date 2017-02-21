@@ -1,3 +1,5 @@
+DEPRECATION NOTICE: This project is not being maintained nor supported for now. Feel free to use it for information purposes but it is out of date in its support for WDL and we make no claims about it working properly.
+
 # PyWDL
 
 [![Build Status](https://travis-ci.org/broadinstitute/pywdl.svg?branch=master)](https://travis-ci.org/broadinstitute/pywdl)
