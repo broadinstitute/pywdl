@@ -1,4 +1,10 @@
-DEPRECATION NOTICE: This project is not being maintained nor supported for now. Feel free to use it for information purposes but it is out of date in its support for WDL and we make no claims about it working properly.
+# READ THIS FIRST!
+
+**There is a very low probability that you're in the right place.** If you're looking for a python WDL parser see the [WDL repo](https://github.com/openwdl/wdl/blob/master/parsers/python/wdl_parser.py). 
+
+**This repository is deprecated** The intention of this repository was to provide a Python object model on top of parsed WDL. It is out of date but we're leaving it here in case someone wants an example of how to do such a thing. If you'd like to pick up the torch please let us know.
+
+** NOTE AGAIN ** If you're reading below this you're almost certainly in the wrong place!
 
 # PyWDL
 
