@@ -4,7 +4,7 @@
 
 **This repository is deprecated** The intention of this repository was to provide a Python object model on top of parsed WDL. It is out of date but we're leaving it here in case someone wants an example of how to do such a thing. If you'd like to pick up the torch please let us know.
 
-** NOTE AGAIN ** If you're reading below this you're almost certainly in the wrong place!
+**NOTE AGAIN** If you're reading below this you're almost certainly in the wrong place!
 
 # PyWDL
 
